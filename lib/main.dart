@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => GameProvider(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -20,33 +26,8 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class GameScreen extends StatefulWidget {
+class GameScreen extends StatelessWidget {
   const GameScreen({super.key});
-
-  @override
-  State<GameScreen> createState() => _GameScreenState();
-}
-
-class _GameScreenState extends State<GameScreen> {
-  late List<CardItem> cards;
-  
-  @override
-  void initState() {
-    super.initState();
-    initializeCards();
-  }
-
-  void initializeCards() {
-    const numberOfPairs = 8;
-    cards = [];
-    
-    for (var i = 0; i < numberOfPairs; i++) {
-      cards.add(CardItem(id: i, value: i));
-      cards.add(CardItem(id: i + numberOfPairs, value: i));
-    }
-    
-    cards.shuffle();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,22 +36,39 @@ class _GameScreenState extends State<GameScreen> {
         title: const Text('Card Matching Game'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 4,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-          ),
-          itemCount: cards.length,
-          itemBuilder: (context, index) {
-            return GameCard(
-              card: cards[index],
-              onTap: () {},
-            );
-          },
-        ),
+      body: Consumer<GameProvider>(
+        builder: (context, gameProvider, child) {
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  'Matches: ${gameProvider.matchedPairs}',
+                  style: const TextStyle(fontSize: 20),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: GridView.builder(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 4,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 8,
+                    ),
+                    itemCount: gameProvider.cards.length,
+                    itemBuilder: (context, index) {
+                      return GameCard(
+                        card: gameProvider.cards[index],
+                        onTap: () => gameProvider.flipCard(index),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -106,7 +104,11 @@ class GameCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: card.isFlipped ? Colors.white : Colors.blue,
+          color: card.isMatched 
+              ? Colors.green.shade100
+              : card.isFlipped 
+                  ? Colors.white 
+                  : Colors.blue,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: Colors.grey),
         ),
@@ -123,5 +125,67 @@ class GameCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// Simple state management class
+class GameProvider extends ChangeNotifier {
+  List<CardItem> cards = [];
+  bool canFlipCard = true;
+  CardItem? firstCard;
+  int matchedPairs = 0;
+
+  GameProvider() {
+    initializeCards();
+  }
+
+  void initializeCards() {
+    const numberOfPairs = 8;
+    cards = [];
+    
+    for (var i = 0; i < numberOfPairs; i++) {
+      cards.add(CardItem(id: i, value: i));
+      cards.add(CardItem(id: i + numberOfPairs, value: i));
+    }
+    
+    cards.shuffle();
+    notifyListeners();
+  }
+
+  void flipCard(int index) {
+    if (!canFlipCard || cards[index].isFlipped || cards[index].isMatched) return;
+
+    cards[index].isFlipped = true;
+    
+    if (firstCard == null) {
+      firstCard = cards[index];
+    } else {
+      checkMatch(cards[index]);
+    }
+    
+    notifyListeners();
+  }
+
+  void checkMatch(CardItem secondCard) {
+    canFlipCard = false;
+
+    if (firstCard!.value == secondCard.value) {
+      firstCard!.isMatched = true;
+      secondCard.isMatched = true;
+      matchedPairs++;
+      resetTurn();
+    } else {
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        firstCard!.isFlipped = false;
+        secondCard.isFlipped = false;
+        resetTurn();
+      });
+    }
+  }
+
+  void resetTurn() {
+    firstCard = null;
+    canFlipCard = true;
+    notifyListeners();
   }
 }

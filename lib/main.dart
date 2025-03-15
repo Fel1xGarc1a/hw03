@@ -58,7 +58,7 @@ class GameScreen extends StatelessWidget {
                     ),
                     itemCount: gameProvider.cards.length,
                     itemBuilder: (context, index) {
-                      return GameCard(
+                      return FlipCard(
                         card: gameProvider.cards[index],
                         onTap: () => gameProvider.flipCard(index),
                       );
@@ -88,41 +88,94 @@ class CardItem {
   });
 }
 
-class GameCard extends StatelessWidget {
+// Add this new class for the flip animation
+class FlipCard extends StatefulWidget {
   final CardItem card;
   final VoidCallback onTap;
 
-  const GameCard({
+  const FlipCard({
     super.key,
     required this.card,
     required this.onTap,
   });
 
   @override
+  State<FlipCard> createState() => _FlipCardState();
+}
+
+class _FlipCardState extends State<FlipCard> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _animation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(FlipCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.card.isFlipped) {
+      _controller.forward();
+    } else {
+      _controller.reverse();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: card.isMatched 
-              ? Colors.green.shade100
-              : card.isFlipped 
-                  ? Colors.white 
-                  : Colors.blue,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.grey),
-        ),
-        child: Center(
-          child: card.isFlipped
-              ? Text(
-                  card.value.toString(),
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                )
-              : null,
-        ),
+      onTap: widget.onTap,
+      child: AnimatedBuilder(
+        animation: _animation,
+        builder: (context, child) {
+          final angle = _animation.value * 3.14;
+          return Transform(
+            transform: Matrix4.identity()
+              ..setEntry(3, 2, 0.001)
+              ..rotateY(angle),
+            alignment: Alignment.center,
+            child: Container(
+              decoration: BoxDecoration(
+                color: widget.card.isMatched
+                    ? Colors.green.shade100
+                    : angle < 1.57 
+                        ? Colors.blue
+                        : Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey),
+              ),
+              child: Center(
+                child: angle < 1.57
+                    ? null
+                    : Transform(
+                        transform: Matrix4.identity()..rotateY(3.14),
+                        alignment: Alignment.center,
+                        child: Text(
+                          widget.card.value.toString(),
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

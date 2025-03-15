@@ -16,13 +16,82 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Card Matching Game',
+      title: 'HW03 - Card Matching Game',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
       home: const GameScreen(),
     );
+  }
+}
+
+class GameProvider extends ChangeNotifier {
+  List<CardItem> cards = [];
+  bool canFlipCard = true;
+  CardItem? firstCard;
+  int matchedPairs = 0;
+  bool isGameComplete = false;
+
+  GameProvider() {
+    initializeCards();
+  }
+
+  void initializeCards() {
+    const numberOfPairs = 8;
+    cards = [];
+    matchedPairs = 0;
+    isGameComplete = false;
+    
+    for (var i = 0; i < numberOfPairs; i++) {
+      cards.add(CardItem(id: i, value: i));
+      cards.add(CardItem(id: i + numberOfPairs, value: i));
+    }
+    
+    cards.shuffle();
+    notifyListeners();
+  }
+
+  void flipCard(int index) {
+    if (!canFlipCard || cards[index].isFlipped || cards[index].isMatched) return;
+
+    cards[index].isFlipped = true;
+    
+    if (firstCard == null) {
+      firstCard = cards[index];
+    } else {
+      checkMatch(cards[index]);
+    }
+    
+    notifyListeners();
+  }
+
+  void checkMatch(CardItem secondCard) {
+    canFlipCard = false;
+
+    if (firstCard!.value == secondCard.value) {
+      firstCard!.isMatched = true;
+      secondCard.isMatched = true;
+      matchedPairs++;
+      
+      if (matchedPairs == cards.length ~/ 2) {
+        isGameComplete = true;
+      }
+      
+      resetTurn();
+    } else {
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        firstCard!.isFlipped = false;
+        secondCard.isFlipped = false;
+        resetTurn();
+      });
+    }
+  }
+
+  void resetTurn() {
+    firstCard = null;
+    canFlipCard = true;
+    notifyListeners();
   }
 }
 
@@ -33,20 +102,19 @@ class GameScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Card Matching Game'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: const Text('Memory Game'),
       ),
       body: Consumer<GameProvider>(
         builder: (context, gameProvider, child) {
           return Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  'Matches: ${gameProvider.matchedPairs}',
-                  style: const TextStyle(fontSize: 20),
+              if (gameProvider.isGameComplete)
+                const Center(
+                  child: Text(
+                    'You Won!',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
                 ),
-              ),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
@@ -88,7 +156,6 @@ class CardItem {
   });
 }
 
-// Add this new class for the flip animation
 class FlipCard extends StatefulWidget {
   final CardItem card;
   final VoidCallback onTap;
@@ -135,6 +202,22 @@ class _FlipCardState extends State<FlipCard> with SingleTickerProviderStateMixin
     }
   }
 
+  Widget _buildCardBack() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(
+          'https://deckofcardsapi.com/static/img/back.png',
+          fit: BoxFit.cover,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -148,20 +231,18 @@ class _FlipCardState extends State<FlipCard> with SingleTickerProviderStateMixin
               ..setEntry(3, 2, 0.001)
               ..rotateY(angle),
             alignment: Alignment.center,
-            child: Container(
-              decoration: BoxDecoration(
-                color: widget.card.isMatched
-                    ? Colors.green.shade100
-                    : angle < 1.57 
-                        ? Colors.blue
-                        : Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey),
-              ),
-              child: Center(
-                child: angle < 1.57
-                    ? null
-                    : Transform(
+            child: angle < 1.57
+                ? _buildCardBack()
+                : Container(
+                    decoration: BoxDecoration(
+                      color: widget.card.isMatched
+                          ? Colors.green.shade100
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey),
+                    ),
+                    child: Center(
+                      child: Transform(
                         transform: Matrix4.identity()..rotateY(3.14),
                         alignment: Alignment.center,
                         child: Text(
@@ -172,73 +253,11 @@ class _FlipCardState extends State<FlipCard> with SingleTickerProviderStateMixin
                           ),
                         ),
                       ),
-              ),
-            ),
+                    ),
+                  ),
           );
         },
       ),
     );
-  }
-}
-
-// Simple state management class
-class GameProvider extends ChangeNotifier {
-  List<CardItem> cards = [];
-  bool canFlipCard = true;
-  CardItem? firstCard;
-  int matchedPairs = 0;
-
-  GameProvider() {
-    initializeCards();
-  }
-
-  void initializeCards() {
-    const numberOfPairs = 8;
-    cards = [];
-    
-    for (var i = 0; i < numberOfPairs; i++) {
-      cards.add(CardItem(id: i, value: i));
-      cards.add(CardItem(id: i + numberOfPairs, value: i));
-    }
-    
-    cards.shuffle();
-    notifyListeners();
-  }
-
-  void flipCard(int index) {
-    if (!canFlipCard || cards[index].isFlipped || cards[index].isMatched) return;
-
-    cards[index].isFlipped = true;
-    
-    if (firstCard == null) {
-      firstCard = cards[index];
-    } else {
-      checkMatch(cards[index]);
-    }
-    
-    notifyListeners();
-  }
-
-  void checkMatch(CardItem secondCard) {
-    canFlipCard = false;
-
-    if (firstCard!.value == secondCard.value) {
-      firstCard!.isMatched = true;
-      secondCard.isMatched = true;
-      matchedPairs++;
-      resetTurn();
-    } else {
-      Future.delayed(const Duration(milliseconds: 1000), () {
-        firstCard!.isFlipped = false;
-        secondCard.isFlipped = false;
-        resetTurn();
-      });
-    }
-  }
-
-  void resetTurn() {
-    firstCard = null;
-    canFlipCard = true;
-    notifyListeners();
   }
 }
